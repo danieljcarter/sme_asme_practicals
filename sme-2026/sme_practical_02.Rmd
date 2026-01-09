@@ -10,7 +10,7 @@ Welcome to SME Practical 2. In this session, we'll compute and compare mortality
 
 This practical looks at:
 
-- Rates instead of just counts (accounting for person-time)
+- Rates instead of just counts 
 - Poisson regression for rate data
 - Stratified analysis to examine possible confounding
 - Effect modification (does the association differ across strata?)
