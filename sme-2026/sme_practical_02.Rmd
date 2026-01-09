@@ -184,11 +184,67 @@ Notice that Method 1 (by hand) and Method 2 (Poisson regression) give you the sa
 
 ---
 
-# Question 2: Mortality Rate by Employment Grade
+# Question 2: Mortality Rates by Age Group
 
-Do high-grade and low-grade employees have different mortality rates? 
+## Create age categories
 
-First, let's understand the exposure variable:
+While age is continuous, creating categories makes it easier to see patterns and present results in tables - at the cost of losing some information. The `cut()` function divides the continuous age variable into groups. `right = FALSE` means 40-49 includes 40 but not 45 (45 goes in the next group).
+
+```{r age_categories}
+# Create age groups
+whitehall <- whitehall |> 
+  mutate(agecat = cut(agein, 
+                      breaks = c(40, 45, 50, 55, 60, 65, 70),
+                      right = FALSE))
+
+# Check the distribution
+table(whitehall$agecat)
+```
+
+## Estimate rates by age group
+
+To estimate predicted rates per age group, we use avg_predictions from the marginaleffects package. We have to tell R which model we're using, which variables to group by, and use type = "response" to indicate we don't want any transformations.
+
+```{r rates_by_age}
+# Fit Poisson model with age categories
+model_age <- glm(all ~ agecat + offset(log(followup_years)), 
+                 family = poisson, 
+                 data = whitehall)
+
+# Get predicted rates for each age group
+# These are "marginal predictions" - the predicted rate within each age group
+predictions_age <- avg_predictions(model_age, 
+                                   variables = "agecat",
+                                   type = "response")
+
+# Display as nicely printed table with rates per 1000 person-years
+predictions_age |> 
+  as_tibble() |> 
+  mutate(rate_per_1000 = estimate * 1000,
+         conf.low_1000 = conf.low * 1000,
+         conf.high_1000 = conf.high * 1000) |> 
+  select(agecat, rate_per_1000, conf.low_1000, conf.high_1000) |> 
+  knitr::kable(digits = 2, 
+               col.names = c("Age Group", "Rate per 1000 PY", 
+                           "95% CI Lower", "95% CI Upper"))
+```
+
+
+### Rate ratios comparing age groups
+
+```{r rate_ratios_age}
+# Display rate ratios (youngest group as reference)
+tbl_regression(model_age, 
+               exponentiate = TRUE,
+               label = list(agecat = "Age at entry (years)"))
+```
+
+The output shows rate ratios comparing each age group to the reference (youngest) group.
+
+---
+
+# Question 3: Mortality Rate by Employment Grade
+
 
 ```{r explore_grade}
 # Look at the grade distribution
@@ -248,7 +304,7 @@ The p-value tells us about the strength of evidence against the null hypothesis 
 
 ---
 
-# Question 3: Is Age a Confounder?
+# Question 4: Is Age a Confounder?
 
 Now we need to think about confounding. Confounding is a property of the real world, not of your data. It occurs when there's a third variable (here, age) that is a common cause of exposure and outcome. Age seems likely to be a confounder since it:
 
@@ -261,7 +317,7 @@ If both are true in the real world, then age could explain part or all of the as
 
 ## Create age categories
 
-First, let's create age groups so we can stratify the analysis:
+First, let's create some new age groups so we can stratify the analysis:
 
 ```{r create_agecat}
 # Create age categories
@@ -275,7 +331,6 @@ whitehall <- whitehall |>
 table(whitehall$agecat)
 ```
 
-While age is continuous, creating categories makes it easier to see patterns and present results in tables - at the cost of losing some information. The `cut()` function divides the continuous age variable into groups. `right = FALSE` means 40-49 includes 40 but not 50 (50 goes in the next group).
 
 ## Check associations
 
@@ -331,6 +386,21 @@ model_grade_age |>
       agecat ~ "Age Group"
     )
   )
+
+# Compare unadjusted and adjusted rate ratios
+tbl_merge(
+  list(
+    tbl_regression(model_grade, 
+                   exponentiate = TRUE,
+                   include = grade,
+                   label = list(grade = "Employment grade")),
+    tbl_regression(model_grade_age, 
+                   exponentiate = TRUE,
+                   include = grade,
+                   label = list(grade = "Employment grade"))
+  ),
+  tab_spanner = c("**Unadjusted**", "**Adjusted for age**")
+)
 ```
 
 - This is the grade effect holding age constant (within people of the same age, does grade still matter?)
@@ -338,6 +408,11 @@ model_grade_age |>
 - If the RR moved closer to 1, age could have been explaining part of the grade-mortality association
 - If the RR moved away from 1, age could have been masking part of the association
 
+The table compares unadjusted and age-adjusted rate ratios for employment grade. 
+
+Notice the R code here is somewhat complex: we have seen tbl_regression() before for printing results from regression analyses. We do this twice for each of the models that we are examining. We then wrap both tables with list() to tell R that we are working with two objects that form part of one larger whole. Then we use tbl_merge() to display both elements of the list at the same time. Since we have merged two tables, we need to also add a label within tbl_merge() to denote which table is which, which we do with tab_spanner(). Notice the indentation of this code block -- can you see which open brackets match to which close brackets?
+
+---
 
 ## Stratified analysis
 
@@ -386,7 +461,7 @@ Each row shows the grade-mortality rate ratio within that age group. Do the rate
 
 ---
 
-# Question 4: Effect Modification
+# Question 5: Effect Modification
 
 Effect modification: *Does the association between grade and mortality differ across age groups?*
 
@@ -459,43 +534,68 @@ If there is NOT effect modification: Report the age-adjusted overall result - on
 
 Let's get the rate ratios for each stratum with proper confidence intervals.
 
-This requires some new code. We use comparisons() within the marginaleffects package to make comparisons. We first tell comparisons() which model to use (the interaction model), which variables to look at (grade), and which group we want (agecat), as well as to report a ratio (instead of e.g. a difference)
+We use avg_comparisons() within the marginaleffects package to make comparisons. We first tell comparisons() which model to use (the interaction model), which variables to look at (grade), and which group we want (agecat), as well as to report a ratio (instead of e.g. a difference) that's exponentiated
 
 ```{r stratified_rr}
 # Use marginaleffects to get clean comparisons
-comparisons(
+# Get grade effect within each age group
+comparisons_stratified <- avg_comparisons(
   model_interaction,
   variables = "grade",
   by = "agecat",
-  comparison = "ratio") |> 
-  as.data.frame() |> 
+  comparison = "ratioavg",
+  transform = "exp")
+
+# Display as table
+comparisons_stratified |> 
+  as_tibble() |> 
   select(agecat, estimate, conf.low, conf.high) |> 
-  knitr::kable(
-    digits = 2,
-    col.names = c("Age Group", "Rate Ratio", "95% CI Lower", "95% CI Upper"),
-    caption = "Grade Rate Ratios (Low vs High) by Age Group")
+  knitr::kable(digits = 2,
+               col.names = c("Age Group", "Rate Ratio", 
+                           "95% CI Lower", "95% CI Upper"))
 ```
 
 
 ---
 
-# Summary and Interpretation
+# Question 6: CHD-Specific Mortality
 
-A few final comments. In this practical you have:
+Let's repeat the analysis for CHD (coronary heart disease) mortality specifically.
 
-1. Calculated rates accounting for person-time (Method 1 by hand, Method 2 with Poisson regression)
-2. Compared rates between groups (grade-mortality association)
-3. Examine confounding by age 
-4. Tested for effect modification (does the association differ by age?)
+```{r chd_analysis}
+# Crude effect of grade on CHD mortality
+model_chd <- glm(chd ~ grade_f + offset(log(followup_years)), 
+                 family = poisson, 
+                 data = whitehall)
 
-Relating this back to the real world...
+# Get predicted rates
+predictions_chd <- avg_predictions(model_chd, 
+                                   variables = "grade_f",
+                                   type = "response")
 
-- If you found that low grade employees have higher mortality, what might explain this? (Hint: Think about occupational hazards, stress, access to healthcare...)
-- If age is a confounder, what does that tell you about the social patterning of health?
-- If there's were to be effect modification, what would it mean that grade matters more (or less) in certain age groups?
+# Display rates
+predictions_chd |> 
+  as_tibble() |> 
+  mutate(rate_per_1000 = estimate * 1000,
+         conf.low_1000 = conf.low * 1000,
+         conf.high_1000 = conf.high * 1000) |> 
+  select(grade_f, rate_per_1000, conf.low_1000, conf.high_1000) |> 
+  knitr::kable(digits = 2,
+               col.names = c("Grade", "CHD Rate per 1000 PY", 
+                           "95% CI Lower", "95% CI Upper"))
 
-A few final reinforcements:
+# Rate ratio
+tbl_regression(model_chd, 
+               exponentiate = TRUE,
+               label = list(grade_f = "Employment grade"))
+```
 
-- Confounding is about the structure of the real world, not a property of your data
-- P-values tell us about strength of evidence, not about whether something is "true" or "false"
-- Always think about biological/social plausibility alongside statistical evidence
+---
+
+# Key R Functions Used
+
+- `avg_predictions()`: Get predicted rates for each group
+- `avg_comparisons()`: Get marginal rate ratios stratified by another variable
+- `tbl_regression()`: Display regression results in formatted tables
+- `lrtest()`: Likelihood ratio test comparing nested models
+- `tbl_merge()`: Display multiple model tables side-by-side
