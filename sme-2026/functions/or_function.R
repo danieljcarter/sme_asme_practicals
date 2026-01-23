@@ -21,16 +21,23 @@ calculate_or <- function(tab) {
   ci_lower <- exp(log(or) - 1.96 * se_log_or)
   ci_upper <- exp(log(or) + 1.96 * se_log_or)
   
+  # Calculate p-value using chi-square test
+  chisq_result <- chisq.test(tab, correct = FALSE)
+  p_value <- chisq_result$p.value
+  
   # Print results
   cat("\nOdds Ratio Calculation\n")
   cat("----------------------\n")
   cat("Odds Ratio:", round(or, 3), "\n")
   cat("95% CI:", round(ci_lower, 3), "-", round(ci_upper, 3), "\n\n")
+  cat("p-value:", format.pval(p_value, digits = 3), "\n\n")
+  
   
   # Return invisibly
   invisible(list(
     or = or,
     ci_lower = ci_lower,
-    ci_upper = ci_upper
+    ci_upper = ci_upper,
+    p_value = p_value
   ))
 }

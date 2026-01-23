@@ -50,7 +50,7 @@ blik <- function(d, h, cut = 0.1465, null = NULL, pval = FALSE) {
   M <- d / N
   
   # Create sequence of pi values to evaluate likelihood over
-  # Using 10,001 points to match Stata's resolution
+  # Using 10,001 points to match Stata's resolution??
   length <- 10001
   
 
@@ -66,11 +66,11 @@ blik <- function(d, h, cut = 0.1465, null = NULL, pval = FALSE) {
   # CALCULATE LIKELIHOOD RATIOS
   
   # The likelihood ratio compares L(pi) to L(M), where M is the MLE
-  # LR(pi) = [pi^d * (1-pi)^h] / [M^d * (1-M)^h]
+  # LR(pi) = [pi^d * (1-pi)^h] / [M^d * (1-M)^h] - double check later
   # Taking logs: log(LR) = d*log(pi/M) + h*log((1-pi)/(1-M))
   
   if (d == 0) {
-    # Special case when d = 0: only depends on h
+    # Special case when d = 0: only depends on h 
     # LR = (1-pi)^h / (1-M)^h = ((1-pi)/(1-M))^h
     lik_data <- lik_data |>
       mutate(lik = (1 - pi)^h)
@@ -84,90 +84,81 @@ blik <- function(d, h, cut = 0.1465, null = NULL, pval = FALSE) {
       select(pi, lik)  # Keep only needed columns
   }
   
-  # FIND SUPPORTED RANGE (if no null hypothesis specified)
+  # FIND SUPPORTED RANGE (always calculate this for the shaded region)
+  
+  if (d == 0) {
+    # When d = 0, lower bound is 0
+    low <- 0
+    # Upper bound found by solving (1-pi)^h = cut for pi
+    high <- 1 - exp(log(cut) / h)
+    
+  } else {
+    # Use bisection method to find lower and upper bounds
+    # where likelihood ratio = cut
+    
+    max_log_lik <- d * log(M) + h * log(1 - M)
+    target_log_lik <- max_log_lik + log(cut)
+    tol <- 0.0001
+    
+    # ---- Find lower bound ----
+    r1 <- 0.00001
+    r2 <- M
+    
+    f1 <- d * log(r1) + h * log(1 - r1) - target_log_lik
+    f2 <- d * log(r2) + h * log(1 - r2) - target_log_lik
+    
+    f <- 1
+    while (abs(f) > tol) {
+      r <- (r1 + r2) * 0.5
+      f <- d * log(r) + h * log(1 - r) - target_log_lik
+      
+      if (f * f1 > 0) {
+        r1 <- r
+        f1 <- f
+      } else {
+        r2 <- r
+        f2 <- f
+      }
+    }
+    low <- r
+    
+    # ---- Find upper bound ----
+    r1 <- 0.99999
+    r2 <- M
+    
+    f1 <- d * log(r1) + h * log(1 - r1) - target_log_lik
+    f2 <- d * log(r2) + h * log(1 - r2) - target_log_lik
+    
+    f <- 1
+    while (abs(f) > tol) {
+      r <- (r1 + r2) * 0.5
+      f <- d * log(r) + h * log(1 - r) - target_log_lik
+      
+      if (f * f1 > 0) {
+        r1 <- r
+        f1 <- f
+      } else {
+        r2 <- r
+        f2 <- f
+      }
+    }
+    high <- r
+  }
+  
+  # PRINT RESULTS AND CALCULATE NULL HYPOTHESIS VALUES (if specified)
   
   if (is.null(null)) {
-    
-    if (d == 0) {
-      # When d = 0, lower bound is 0
-      low <- 0
-      # Upper bound found by solving (1-pi)^h = cut for pi
-      high <- 1 - exp(log(cut) / h)
-      
-    } else {
-      # Use bisection method to find lower and upper bounds
-      # where likelihood ratio = cut
-      
-      max_log_lik <- d * log(M) + h * log(1 - M)
-      target_log_lik <- max_log_lik + log(cut)
-      tol <- 0.0001
-      
-      # ---- Find lower bound ----
-      # Search between a very small value and the MLE
-      r1 <- 0.00001
-      r2 <- M
-      
-      # Calculate function values at endpoints
-      f1 <- d * log(r1) + h * log(1 - r1) - target_log_lik
-      f2 <- d * log(r2) + h * log(1 - r2) - target_log_lik
-      
-      # Bisection algorithm
-      f <- 1
-      while (abs(f) > tol) {
-        r <- (r1 + r2) * 0.5
-        f <- d * log(r) + h * log(1 - r) - target_log_lik
-        
-        if (f * f1 > 0) {
-          r1 <- r
-          f1 <- f
-        } else {
-          r2 <- r
-          f2 <- f
-        }
-      }
-      low <- r
-      
-      # ---- Find upper bound ----
-      # Search between the MLE and a value very close to 1
-      r1 <- 0.99999
-      r2 <- M
-      
-      f1 <- d * log(r1) + h * log(1 - r1) - target_log_lik
-      f2 <- d * log(r2) + h * log(1 - r2) - target_log_lik
-      
-      f <- 1
-      while (abs(f) > tol) {
-        r <- (r1 + r2) * 0.5
-        f <- d * log(r) + h * log(1 - r) - target_log_lik
-        
-        if (f * f1 > 0) {
-          r1 <- r
-          f1 <- f
-        } else {
-          r2 <- r
-          f2 <- f
-        }
-      }
-      high <- r
-    }
-    
     # Print results for supported range
     cat("Most likely value for pi:           ", sprintf("%7.5f", M), "\n")
     cat("Likelihood based limits for pi:     ", sprintf("%7.5f", low), " ", 
         sprintf("%7.5f", high), "\n")
     cat("cut-point:                          ", cut, "\n")
     
-  }
-  
-  # CALCULATE LIKELIHOOD RATIO AT NULL VALUE (if specified)
-  
-  if (!is.null(null)) {
-    
+  } else {
+    # Calculate likelihood ratio at null value
     if (d == 0) {
-      # Special case when d = 0
       lrnull <- (1 - null)^h
     } else {
-      # Calculate likelihood ratio at null value
       log_lrnull <- d * log(null / M) + h * log((1 - null) / (1 - M))
       lrnull <- exp(log_lrnull)
     }
@@ -177,8 +168,7 @@ blik <- function(d, h, cut = 0.1465, null = NULL, pval = FALSE) {
     cat("Null value for pi:                  ", sprintf("%7.5f", null), "\n")
     cat("Lik ratio for null value:           ", sprintf("%7.5f", lrnull), "\n")
     
-    # Calculate approximate p-value 
-    # Using -2*log(LR) ~ chi-square(1) under null hypothesis
+    # Calculate approximate p-value if requested
     if (pval) {
       pval_result <- pchisq(-2 * log(lrnull), df = 1, lower.tail = FALSE)
       cat("Approx p-value:                     ", sprintf("%5.4f", pval_result), "\n")
@@ -190,15 +180,13 @@ blik <- function(d, h, cut = 0.1465, null = NULL, pval = FALSE) {
   # Set up title
   plot_title <- sprintf("Likelihood ratio for risk parameter: D = %d, H = %d", d, h)
   
-  # Filter out very small likelihood values for cleaner plotting
+  # Filter out very small likelihood values for cleaner plotting??
   plot_data <- lik_data |>
     filter(lik > 0.001)
   
-  # Prepare data for shading supported region (if no null hypothesis)
-  if (is.null(null)) {
-    shade_data <- plot_data |>
-      filter(pi >= low & pi <= high)
-  }
+  # Prepare data for shading supported region (always show this)
+  shade_data <- plot_data |>
+    filter(pi >= low & pi <= high)
   
   # Start building plot
   p <- ggplot(plot_data, aes(x = pi, y = lik)) +
@@ -213,16 +201,14 @@ blik <- function(d, h, cut = 0.1465, null = NULL, pval = FALSE) {
       panel.grid.minor = element_line(color = "grey90", linewidth = 0.3)
     )
   
-  # Add shading for supported region if no null hypothesis
-  if (is.null(null)) {
-    p <- p + 
-      geom_ribbon(
-        data = shade_data,
-        aes(ymin = 0, ymax = lik),
-        fill = "lightblue",
-        alpha = 0.3
-      )
-  }
+  # Add shading for supported region (always show this)
+  p <- p + 
+    geom_ribbon(
+      data = shade_data,
+      aes(ymin = 0, ymax = lik),
+      fill = "lightblue",
+      alpha = 0.3
+    )
   
   # Add y-axis breaks
   p <- p + scale_y_continuous(breaks = seq(0, 1, 0.2))
@@ -235,27 +221,26 @@ blik <- function(d, h, cut = 0.1465, null = NULL, pval = FALSE) {
              parse = TRUE,
              size = 4, fontface = "bold")
   
-  # Add points at key locations if no null hypothesis
-  if (is.null(null)) {
-    # Add points at MLE and confidence limits
-    key_points <- tibble(
-      pi = c(M, low, high),
-      lik = c(1, cut, cut)
-    )
-    
+  # Add points at key locations (always show these)
+  key_points <- tibble(
+    pi = c(M, low, high),
+    lik = c(1, cut, cut)
+  )
+  
+  p <- p + 
+    geom_point(data = key_points, aes(x = pi, y = lik), 
+               size = 3, color = "black") +
+    # Add cutoff line (always show this)
+    geom_hline(yintercept = cut, linetype = "dashed", color = "red", linewidth = 0.8)
+  
+  # If testing null hypothesis, add additional line showing LR at null
+  if (!is.null(null)) {
     p <- p + 
-      geom_point(data = key_points, aes(x = pi, y = lik), 
-                 size = 3, color = "black") +
-      # Add horizontal cutoff line
-      geom_hline(yintercept = cut, linetype = "dashed", color = "red", linewidth = 0.8)
-    
-  } else {
-    # Show likelihood ratio at null value
-    p <- p + 
-      geom_hline(yintercept = lrnull, linetype = "dashed", color = "red", linewidth = 0.8) +
+      # Show likelihood ratio at null value with different color
+      geom_hline(yintercept = lrnull, linetype = "dotted", color = "orange", linewidth = 1) +
       # Show null value on x-axis with label
       geom_vline(xintercept = null, linetype = "dotted", color = "darkgreen", linewidth = 0.8) +
-      annotate("text", x = null, y = 1.05, 
+      annotate("text", x = null, y = 1.08, 
                label = "H[0]", 
                parse = TRUE,
                size = 4, fontface = "bold", color = "darkgreen")

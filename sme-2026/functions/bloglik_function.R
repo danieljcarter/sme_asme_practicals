@@ -1,27 +1,25 @@
 # Binomial Log-Likelihood Function
 # Converted from Stata's bloglik.ado
-# Uses tidyverse principles for data manipulation and visualization
 
 library(tidyverse)
 
 #' Calculate and Plot Log-Likelihood for Binomial Parameter
 #'
-#' Plots exact and approximate (quadratic) log-likelihood ratios for a binomial
+#' Plots exact and approximate quadratic log-likelihood ratios for a binomial
 #' parameter, either on the probability scale or log-odds scale.
 #'
 #' @param d Integer: Number of "disease" or "event" cases
 #' @param h Integer: Number of "healthy" or "non-event" cases
 #' @param logodds Logical: If TRUE, plot on log-odds scale instead of probability scale
-#' @param cut Numeric: Cutoff value for log-likelihood ratio (default -1.921, approximately -2 for 95% CI)
+#' @param cut Numeric: Cutoff value for log-likelihood ratio (default -1.921 (??), approximately -2 for 95% CI)
 #' @param samex Logical: Whether to use same x-axis scale. Not allowed with logodds=TRUE.
 #'
 #' @return A ggplot object showing exact and approximate log-likelihood ratio functions
 #' @export
 bloglik <- function(d, h, logodds = FALSE, cut = -1.921, samex = FALSE) {
   
-  # ============================================================================
+
   # INPUT VALIDATION
-  # ============================================================================
   
   # Check that d and h are integers
   if (!is.numeric(d) || d != as.integer(d) || d < 0) {
@@ -36,14 +34,14 @@ bloglik <- function(d, h, logodds = FALSE, cut = -1.921, samex = FALSE) {
     stop("Not possible because likelihood is infinite")
   }
   
-  # samex not allowed with logodds
+  # samex not allowed with logodds -- needed?
   if (samex && logodds) {
     stop("samex not allowed with logodds")
   }
   
-  # ============================================================================
+
   # SETUP PARAMETERS
-  # ============================================================================
+
   
   # Calculate total and MLE for probability
   N <- d + h
@@ -59,9 +57,9 @@ bloglik <- function(d, h, logodds = FALSE, cut = -1.921, samex = FALSE) {
   # Maximum log-likelihood (at MLE)
   max_log_lik <- d * log(M) + h * log(1 - M)
   
-  # ============================================================================
+
   # FIND EXACT SUPPORTED RANGE USING BISECTION
-  # ============================================================================
+
   # Find where log-likelihood ratio equals the cutoff value
   
   # Target log-likelihood (max + cut)
@@ -112,9 +110,9 @@ bloglik <- function(d, h, logodds = FALSE, cut = -1.921, samex = FALSE) {
   }
   high <- r
   
-  # ============================================================================
+
   # CALCULATE AND DISPLAY RESULTS
-  # ============================================================================
+
   
   if (!logodds) {
     # ---- Results on probability scale ----
@@ -150,7 +148,7 @@ bloglik <- function(d, h, logodds = FALSE, cut = -1.921, samex = FALSE) {
         approx = -0.5 * ((param - M) / S)^2
       )
     
-    plot_title <- sprintf("log likelihood ratio for risk parameter: D = %d, H = %d", d, h)
+    plot_title <- sprintf("Log likelihood ratio for risk parameter: D = %d, H = %d", d, h)
     
   } else {
     # ---- Results on log-odds scale ----
@@ -188,9 +186,10 @@ bloglik <- function(d, h, logodds = FALSE, cut = -1.921, samex = FALSE) {
         approx = -0.5 * ((param - M_logodds) / S_logodds)^2
       )
     
-    plot_title <- sprintf("log likelihood ratio for logodds parameter: D = %d, H = %d", d, h)
+    plot_title <- sprintf("Log likelihood ratio for logodds parameter: D = %d, H = %d", d, h)
   }
   
+
   # ============================================================================
   # CREATE PLOT
   # ============================================================================
@@ -199,32 +198,107 @@ bloglik <- function(d, h, logodds = FALSE, cut = -1.921, samex = FALSE) {
   plot_data_filtered <- plot_data |>
     filter(true > -5 & approx > -4)
   
+  # Prepare data for shading supported region (where exact log-lik > cut)
+  shade_data <- plot_data_filtered |>
+    filter(true >= cut)
+  
+  # Determine appropriate x-axis label
+  if (!logodds) {
+    x_label <- expression(pi)
+  } else {
+    x_label <- expression(log(pi/(1-pi)))
+  }
+  
   # Create plot with both exact and approximate log-likelihoods
   p <- ggplot(plot_data_filtered, aes(x = param)) +
     geom_line(aes(y = true, color = "Exact"), linewidth = 0.8) +
     geom_line(aes(y = approx, color = "Approximate"), linewidth = 0.8) +
-    geom_hline(yintercept = cut, linetype = "solid", color = "black") +
     scale_color_manual(
       values = c("Exact" = "red", "Approximate" = "blue"),
       name = NULL
     ) +
     labs(
       title = plot_title,
-      x = "param",
-      y = "log likelihood ratio"
+      x = x_label,
+      y = "Log likelihood ratio"
     ) +
     scale_y_continuous(breaks = seq(0, -4, -1)) +
     theme_minimal() +
     theme(legend.position = "bottom")
+  
+  # Add shading for supported region (always show this)
+  p <- p + 
+    geom_ribbon(
+      data = shade_data,
+      aes(ymin = cut, ymax = true),
+      fill = "lightblue",
+      alpha = 0.3
+    )
+  
+  # Add cutoff line (red dashed to match other functions)
+  p <- p + 
+    geom_hline(yintercept = cut, linetype = "dashed", color = "red", linewidth = 0.8)
   
   # Add x-axis formatting if requested
   if (samex && !logodds) {
     p <- p + scale_x_continuous(breaks = seq(0.1, 0.9, 0.1))
   }
   
-  # ============================================================================
+
+  # CREATE PLOT
+  
+  # Filter for reasonable viewing range
+  plot_data_filtered <- plot_data |>
+    filter(true > -5 & approx > -4)
+  
+  # Prepare data for shading supported region (where exact log-lik > cut)
+  shade_data <- plot_data_filtered |>
+    filter(true >= cut)
+  
+  # Determine appropriate x-axis label
+  if (!logodds) {
+    x_label <- expression(pi)
+  } else {
+    x_label <- expression(log(pi/(1-pi)))
+  }
+  
+  # Create plot with both exact and approximate log-likelihoods
+  p <- ggplot(plot_data_filtered, aes(x = param)) +
+    geom_line(aes(y = true, color = "Exact"), linewidth = 0.8) +
+    geom_line(aes(y = approx, color = "Approximate"), linewidth = 0.8) +
+    scale_color_manual(
+      values = c("Exact" = "red", "Approximate" = "blue"),
+      name = NULL
+    ) +
+    labs(
+      title = plot_title,
+      x = x_label,
+      y = "Log likelihood ratio"
+    ) +
+    scale_y_continuous(breaks = seq(0, -4, -1)) +
+    theme_minimal() +
+    theme(legend.position = "bottom")
+  
+  # Add shading for supported region (always show this)
+  p <- p + 
+    geom_ribbon(
+      data = shade_data,
+      aes(ymin = cut, ymax = true),
+      fill = "lightblue",
+      alpha = 0.3
+    )
+  
+  # Add cutoff line (red dashed to match other functions)
+  p <- p + 
+    geom_hline(yintercept = cut, linetype = "dashed", color = "black", linewidth = 0.8)
+  
+  # Add x-axis formatting if requested
+  if (samex && !logodds) {
+    p <- p + scale_x_continuous(breaks = seq(0.1, 0.9, 0.1))
+  }
+  
+
   # BACK-TRANSFORM TO ORIGINAL SCALE IF ON LOG-ODDS
-  # ============================================================================
   
   if (logodds) {
     cat("\n")

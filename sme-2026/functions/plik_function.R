@@ -61,12 +61,14 @@ plik <- function(d, y, null = NULL, cut = 0.1465, pval = FALSE, per = 1000) {
         lambda_display = lambda * per
       )
     
-    # Calculate supported range or null hypothesis results
+    # FIND SUPPORTED RANGE (always calculate for shaded region)
+    low <- 0
+    high <- -log(cut) / y
+    
+    # PRINT RESULTS AND CALCULATE NULL HYPOTHESIS VALUES (if specified)
+    
     if (is.null(null)) {
-      # Find supported range
-      low <- 0
-      high <- -log(cut) / y
-      
+      # Print results for supported range
       cat("Most likely value for lambda:              ", sprintf("%7.1f", M * per), "\n")
       cat("Likelihood based limits for lambda:        ", sprintf("%7.1f", low * per), " ", sprintf("%7.5f", high * per), "\n")
       cat("cut-point:                                 ", cut, "\n")
@@ -86,6 +88,12 @@ plik <- function(d, y, null = NULL, cut = 0.1465, pval = FALSE, per = 1000) {
       }
     }
     
+    # Prepare data for shading supported region (always show this)
+    shade_data <- lik_data |>
+      filter(lambda_display >= low * per & lambda_display <= high * per) |>
+      filter(lik > 0.01)
+    
+    # CREATE PLOT
     # Create plot with subtitle showing rate scale
     p <- ggplot(lik_data |> filter(lik > 0.01), 
                 aes(x = lambda_display, y = lik)) +
@@ -102,6 +110,15 @@ plik <- function(d, y, null = NULL, cut = 0.1465, pval = FALSE, per = 1000) {
         panel.grid.minor = element_line(color = "grey90", linewidth = 0.3)
       )
     
+    # Add shading for supported region (always show this)
+    p <- p + 
+      geom_ribbon(
+        data = shade_data,
+        aes(ymin = 0, ymax = lik),
+        fill = "lightblue",
+        alpha = 0.3
+      )
+    
     # Calculate a small offset for label (1% of x-axis range)
     x_offset <- (max(lik_data$lambda_display, na.rm = TRUE) - 
                    min(lik_data$lambda_display, na.rm = TRUE)) * 0.01
@@ -114,29 +131,34 @@ plik <- function(d, y, null = NULL, cut = 0.1465, pval = FALSE, per = 1000) {
                parse = TRUE,
                size = 4, fontface = "bold")
     
-    # Add reference lines
-    if (is.null(null)) {
-
-      p <- p + geom_hline(yintercept = cut, linetype = "dashed", color = "red", linewidth = 0.8) +
-        # Add points at key locations
-        geom_point(data = tibble(lambda_display = c(M * per, low * per, high * per),
-                                 lik = c(exp(-M * y), cut, cut)),
-                   aes(x = lambda_display, y = lik),
-                   size = 3, color = "black")
-    } else {
+    # Add points at key locations (always show these)
+    key_points <- tibble(
+      lambda_display = c(M * per, low * per, high * per),
+      lik = c(exp(-M * y), cut, cut)
+    )
+    
+    p <- p + 
+      geom_point(data = key_points, aes(x = lambda_display, y = lik), 
+                 size = 3, color = "black") +
+      # Add cutoff line (always show this)
+      geom_hline(yintercept = cut, linetype = "dashed", color = "red", linewidth = 0.8)
+    
+    # If testing null hypothesis, add additional line showing LR at null
+    if (!is.null(null)) {
       p <- p + 
-        geom_hline(yintercept = lrnull, linetype = "dashed", color = "red", linewidth = 0.8) +
-        geom_vline(xintercept = M * per, linetype = "solid", color = "black", linewidth = 0.8) +
+        # Show likelihood ratio at null value with different color
+        geom_hline(yintercept = lrnull, linetype = "dotted", color = "orange", linewidth = 1) +
+        # Show null value on x-axis with label
         geom_vline(xintercept = null, linetype = "dotted", color = "darkgreen", linewidth = 0.8) +
-        annotate("text", x = null, y = 1.05, 
+        annotate("text", x = null, y = 1.08, 
                  label = expression(H[0]), 
                  size = 4, fontface = "bold", color = "darkgreen")
     }
     
     
-  } else {
-    
     # GENERAL CASE: d > 0
+    
+  } else {
     
     R <- 4.0
     S <- sqrt(1 / d)
@@ -160,63 +182,64 @@ plik <- function(d, y, null = NULL, cut = 0.1465, pval = FALSE, per = 1000) {
       ) |>
       select(lambda, lambda_display, lik)
     
-    # FIND SUPPORTED RANGE OR EVALUATE NULL HYPOTHESIS
+    # FIND SUPPORTED RANGE (always calculate for shaded region)
+    
+    # Find lower bound using bisection
+    r1 <- 0.01 * M
+    r2 <- M
+    
+    f1 <- d * log(r1) - r1 * y - max_log_lik - log(cut)
+    f2 <- d * log(r2) - r2 * y - max_log_lik - log(cut)
+    
+    f <- 1
+    tol <- 0.0001
+    
+    while (abs(f) > tol) {
+      r <- (r1 + r2) * 0.5
+      f <- d * log(r) - r * y - max_log_lik - log(cut)
+      
+      if (f * f1 > 0) {
+        r1 <- r
+        f1 <- f
+      } else {
+        r2 <- r
+        f2 <- f
+      }
+    }
+    low <- r
+    
+    # Find upper bound using bisection
+    r1 <- 10 * M
+    r2 <- M
+    
+    f1 <- d * log(r1) - r1 * y - max_log_lik - log(cut)
+    f2 <- d * log(r2) - r2 * y - max_log_lik - log(cut)
+    
+    f <- 1
+    while (abs(f) > tol) {
+      r <- (r1 + r2) * 0.5
+      f <- d * log(r) - r * y - max_log_lik - log(cut)
+      
+      if (f * f1 > 0) {
+        r1 <- r
+        f1 <- f
+      } else {
+        r2 <- r
+        f2 <- f
+      }
+    }
+    high <- r
+    
+    # PRINT RESULTS AND CALCULATE NULL HYPOTHESIS VALUES (if specified)
     
     if (is.null(null)) {
-      
-      # Find lower bound using bisection
-      r1 <- 0.01 * M
-      r2 <- M
-      
-      f1 <- d * log(r1) - r1 * y - max_log_lik - log(cut)
-      f2 <- d * log(r2) - r2 * y - max_log_lik - log(cut)
-      
-      f <- 1
-      tol <- 0.0001
-      
-      while (abs(f) > tol) {
-        r <- (r1 + r2) * 0.5
-        f <- d * log(r) - r * y - max_log_lik - log(cut)
-        
-        if (f * f1 > 0) {
-          r1 <- r
-          f1 <- f
-        } else {
-          r2 <- r
-          f2 <- f
-        }
-      }
-      low <- r
-      
-      # Find upper bound using bisection
-      r1 <- 10 * M
-      r2 <- M
-      
-      f1 <- d * log(r1) - r1 * y - max_log_lik - log(cut)
-      f2 <- d * log(r2) - r2 * y - max_log_lik - log(cut)
-      
-      f <- 1
-      while (abs(f) > tol) {
-        r <- (r1 + r2) * 0.5
-        f <- d * log(r) - r * y - max_log_lik - log(cut)
-        
-        if (f * f1 > 0) {
-          r1 <- r
-          f1 <- f
-        } else {
-          r2 <- r
-          f2 <- f
-        }
-      }
-      high <- r
-      
+      # Print results for supported range
       cat("Most likely value for lambda:                   ", sprintf("%7.1f", M * per), "\n")
       cat("Likelihood based limits for lambda:             ", 
           sprintf("%7.1f", low * per), " ", sprintf("%7.1f", high * per), "\n")
       cat("cut-point:                                      ", cut, "\n")
       
     } else {
-      
       # Evaluate likelihood at null value
       nval <- null / per  # Convert from display scale
       lrnull <- d * log(nval) - y * nval - max_log_lik
@@ -231,6 +254,11 @@ plik <- function(d, y, null = NULL, cut = 0.1465, pval = FALSE, per = 1000) {
         cat("Approx p-value:                                 ", sprintf("%5.3f", pval_result), "\n")
       }
     }
+    
+    # Prepare data for shading supported region (always show this)
+    shade_data <- lik_data |>
+      filter(lambda_display >= low * per & lambda_display <= high * per) |>
+      filter(lik > 0.01)
     
     # CREATE PLOT
     
@@ -249,6 +277,15 @@ plik <- function(d, y, null = NULL, cut = 0.1465, pval = FALSE, per = 1000) {
         panel.grid.minor = element_line(color = "grey90", linewidth = 0.3)
       )
     
+    # Add shading for supported region (always show this)
+    p <- p + 
+      geom_ribbon(
+        data = shade_data,
+        aes(ymin = 0, ymax = lik),
+        fill = "lightblue",
+        alpha = 0.3
+      )
+    
     # Calculate a small offset for label (1% of x-axis range)
     x_offset <- (max(lik_data$lambda_display, na.rm = TRUE) - 
                    min(lik_data$lambda_display, na.rm = TRUE)) * 0.01
@@ -261,23 +298,26 @@ plik <- function(d, y, null = NULL, cut = 0.1465, pval = FALSE, per = 1000) {
                parse = TRUE,
                size = 4, fontface = "bold")
     
-    # Add reference lines
-    if (is.null(null)) {
-      p <- p + geom_hline(yintercept = cut, linetype = "dashed", color = "red", linewidth = 0.8)
-      
-      p <- p + geom_hline(yintercept = cut, linetype = "dashed", color = "red", linewidth = 0.8) +
-        # Add points at key locations
-        geom_point(data = tibble(lambda_display = c(M * per, low * per, high * per),
-                                 lik = c(1, cut, cut)),
-                   aes(x = lambda_display, y = lik),
-                   size = 3, color = "black")
-      
-    } else {
+    # Add points at key locations (always show these)
+    key_points <- tibble(
+      lambda_display = c(M * per, low * per, high * per),
+      lik = c(1, cut, cut)
+    )
+    
+    p <- p + 
+      geom_point(data = key_points, aes(x = lambda_display, y = lik), 
+                 size = 3, color = "black") +
+      # Add cutoff line (always show this)
+      geom_hline(yintercept = cut, linetype = "dashed", color = "red", linewidth = 0.8)
+    
+    # If testing null hypothesis, add additional line showing LR at null
+    if (!is.null(null)) {
       p <- p + 
-        geom_hline(yintercept = lrnull, linetype = "dashed", color = "red", linewidth = 0.8) +
-        geom_vline(xintercept = M * per, linetype = "solid", color = "black", linewidth = 0.8) +
+        # Show likelihood ratio at null value with different color
+        geom_hline(yintercept = lrnull, linetype = "dotted", color = "orange", linewidth = 1) +
+        # Show null value on x-axis with label
         geom_vline(xintercept = null, linetype = "dotted", color = "darkgreen", linewidth = 0.8) +
-        annotate("text", x = null + x_offset, y = 1.05, 
+        annotate("text", x = null + x_offset, y = 1.08, 
                  label = expression(H[0]), 
                  size = 4, fontface = "bold", color = "darkgreen")
     }

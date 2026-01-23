@@ -1,6 +1,5 @@
 # Poisson Log-Likelihood Function
 # Converted from Stata's ploglik.ado
-# Uses tidyverse principles for data manipulation and visualization
 
 library(tidyverse)
 
@@ -18,10 +17,8 @@ library(tidyverse)
 #' @return A ggplot object showing exact and approximate log-likelihood ratio functions
 #' @export
 ploglik <- function(d, y, lograte = FALSE, cut = -1.921, per = 1000) {
-  
-  # ============================================================================
+
   # INPUT VALIDATION
-  # ============================================================================
   
   # Check for zero values - log-likelihood is infinite when d=0
   if (!is.numeric(d) || d != as.integer(d) || d <= 0) {
@@ -33,9 +30,8 @@ ploglik <- function(d, y, lograte = FALSE, cut = -1.921, per = 1000) {
     stop("needs person-years (y must be positive)")
   }
   
-  # ============================================================================
+
   # SETUP PARAMETERS
-  # ============================================================================
   
   length <- 10001
   R <- 3.0
@@ -51,9 +47,8 @@ ploglik <- function(d, y, lograte = FALSE, cut = -1.921, per = 1000) {
   # Maximum log-likelihood
   max_log_lik <- d * log(d / y) - d
   
-  # ============================================================================
+
   # FIND EXACT SUPPORTED RANGE USING BISECTION
-  # ============================================================================
   
   # Target log-likelihood
   target_log_lik <- max_log_lik + cut
@@ -103,9 +98,9 @@ ploglik <- function(d, y, lograte = FALSE, cut = -1.921, per = 1000) {
   }
   high <- r
   
-  # ============================================================================
+
   # CALCULATE AND DISPLAY RESULTS
-  # ============================================================================
+ 
   
   if (!lograte) {
     # ---- Results on rate scale ----
@@ -141,7 +136,7 @@ ploglik <- function(d, y, lograte = FALSE, cut = -1.921, per = 1000) {
         param_display = param * per
       )
     
-    plot_title <- sprintf("log likelihood for rate parameter: D = %d, Y = %g", d, y)
+    plot_title <- sprintf("Log likelihood for rate parameter: D = %d, Y = %g", d, y)
     
   } else {
     # ---- Results on log-rate scale ----
@@ -184,59 +179,57 @@ ploglik <- function(d, y, lograte = FALSE, cut = -1.921, per = 1000) {
         param_display = param + log(per)
       )
     
-    plot_title <- sprintf("log likelihood for lograte parameter: D = %d, Y = %g", d, y)
+    plot_title <- sprintf("Log likelihood for lograte parameter: D = %d, Y = %g", d, y)
   }
   
-  # ============================================================================
+
   # CREATE PLOT
-  # ============================================================================
+
   
   # Filter for reasonable viewing range
   plot_data_filtered <- plot_data |>
     filter(approx > -2.0)
   
+  # Prepare data for shading supported region (where exact log-lik > cut)
+  shade_data <- plot_data_filtered |>
+    filter(true >= cut)
+  
+  # Determine appropriate x-axis label
+  if (!lograte) {
+    x_label <- expression(lambda)
+  } else {
+    x_label <- expression(log(lambda))
+  }
+  
   # Create plot with both exact and approximate log-likelihoods
   p <- ggplot(plot_data_filtered, aes(x = param_display)) +
     geom_line(aes(y = true, color = "Exact"), linewidth = 0.8) +
     geom_line(aes(y = approx, color = "Approximate"), linewidth = 0.8) +
-    geom_hline(yintercept = cut, linetype = "solid", color = "black") +
     scale_color_manual(
       values = c("Exact" = "red", "Approximate" = "blue"),
       name = NULL
     ) +
     labs(
       title = plot_title,
-      x = "param",
-      y = "log likelihood ratio"
+      x = x_label,
+      y = "Log likelihood ratio"
     ) +
     scale_y_continuous(breaks = seq(0, -6, -1)) +
     theme_minimal() +
     theme(legend.position = "bottom")
   
-  # ============================================================================
-  # BACK-TRANSFORM TO ORIGINAL SCALE IF ON LOG-RATE
-  # ============================================================================
+  # Add shading for supported region (always show this)
+  p <- p + 
+    geom_ribbon(
+      data = shade_data,
+      aes(ymin = cut, ymax = true),
+      fill = "lightblue",
+      alpha = 0.3
+    )
   
-  if (lograte) {
-    cat("\n")
-    cat("Back on original rate scale\n")
-    
-    # Transform back to rate scale
-    low_rate <- exp(low_lograte)
-    high_rate <- exp(high_lograte)
-    plow_rate <- exp(plow_lograte)
-    phigh_rate <- exp(phigh_lograte)
-    M_rate <- exp(M_lograte)
-    
-    cat("Most likely value for rate parameter:           ", 
-        sprintf("%7.2f", M_rate * per), "\n")
-    cat("Likelihood based limits for rate parameter:     ", 
-        sprintf("%7.2f", low_rate * per), " ", 
-        sprintf("%7.2f", high_rate * per), "\n")
-    cat("Approx quadratic limits for rate parameter:     ", 
-        sprintf("%7.2f", plow_rate * per), " ", 
-        sprintf("%7.2f", phigh_rate * per), "\n")
-  }
+  # Add cutoff line (red dashed to match other functions)
+  p <- p + 
+    geom_hline(yintercept = cut, linetype = "dashed", color = "black", linewidth = 0.8)
   
   return(p)
 }
