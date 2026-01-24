@@ -2,6 +2,8 @@
 title: "SME Practical 6: Analysis of Unmatched Case-Control Studies - 2026"
 author: "Daniel J Carter"
 output: html_document
+editor_options: 
+  chunk_output_type: console
 ---
 
 # Overview
@@ -10,7 +12,7 @@ In this practical, you will learn how to analyze unmatched case-control studies 
 
 - Calculate crude odds ratios and confidence intervals for case-control studies
 - Assess confounding using stratified analysis
-- Test for effect modification (interaction)
+- Test for effect modification (using statistical interaction term)
 - Handle missing data appropriately in epidemiological analyses
 - Explore dose-response relationships
 
@@ -22,17 +24,20 @@ In this practical, you will learn how to analyze unmatched case-control studies 
 # Load required packages
 library(haven)            
 library(here)
-library(tidyverse)        
+library(tidyverse)
+library(gtsummary)
+
 
 # Source the Mantel-Haenszel functions
-source(here("sme-2026/functions", "mh_functions.R"))
+# Loads the function so that they are ready to use
+source(here("sme-2026/functions", "mh_functions.R")) 
 source(here("sme-2026/functions", "or_function.R"))
 
 # Set options for cleaner output
 options(digits = 3, scipen = 999)
 ```
 
-You've seen all these packages before in Practicals 2 and 3. They're the standard tidyverse approach for epidemiological analysis in R. You may have not yet seen the `source()` function -- this is reading in three new functions that aim to precisely mimic Stata's mhodds and tabodds commands and to calculate ORs easily. The read-in assumes that you have stored these in a subfolder called 'functions'.
+You've seen all these packages before in Practicals 2 and 3 apart from janitor. They're the standard tidyverse approach for epidemiological analysis in R. You may have not yet seen the `source()` function -- this is reading in three new functions that aim to precisely mimic Stata's mhodds and tabodds commands and to calculate ORs easily. The read-in assumes that you have stored these in a subfolder called 'functions'.
 
 ---
 
@@ -123,14 +128,40 @@ tab_case <- table(mwanza$case, mwanza$ed2)
 tab_case
 
 # With proportions (by row - showing % within cases and controls)
-mwanza |> 
-  count(case, ed2) |> 
-  group_by(case) |> 
-  mutate(percentage = n / sum(n) * 100)
 
-# Get OR with custom function
-calculate_or(tab_case)
+mwanza |> 
+  
+  # counts cases by education level
+  count(case, ed2) |>  
+  
+  # group calculation going forward by case status
+  group_by(case) |>
+  
+  # calculate % within each case group and create variable which combines n and % and prints in this particular format
+  mutate(percentage = n / sum(n) * 100, 
+         n_pct = sprintf("%d (%.1f%%)", n, percentage)) |> 
+  
+  # keep only these selected variables 
+  select(case, ed2, n_pct) |> 
+  
+  # transform dataframe from long format to wide format
+  pivot_wider(names_from = ed2, values_from = n_pct) 
+
+# An important exercise is to run the code line by line so that you understand what each bit of code is doing - you will have to make an edit to the code above to run it line by.
+
 ```
+
+ Why do you think we use row percentages here?
+ 
+ Now calculate with the custom calculate_or function (created in the or_function.R script)
+
+```{r}
+# Get OR with custom function
+
+calculate_or(tab_case)
+
+```
+
 
 Now calculate the unadjusted odds ratio using the Mantel-Haenszel method - same result!
 
@@ -156,6 +187,21 @@ fisher.test(table(mwanza$case, mwanza$ed2))
 
 The null hypothesis of the test is that there is no association between education and case status. The p-value indicates the strength of evidence against this null hypothesis. Fisher's exact test is particularly useful for small cell counts, though with this sample size the chi-squared approximation is adequate. In case-control studies, the p-value from the logistic regression (shown in tbl_regression) tests the same hypothesis: is the OR = 1?
 
+```{r optional logistic regression}
+
+# Optional - practical 9 will go in more detail about logistic regression
+# note the similar code to Poisson regression from practical 2
+
+m1 <- glm(case ~ ed2, family = binomial, data = mwanza)
+summary(m1)
+
+tbl_regression(m1,
+exponentiate = TRUE,
+label = list(ed2 = "Education"))
+
+```
+
+
 ---
 
 # Question 3: Assessing Whether Age is a Confounder or Effect Modifier
@@ -168,23 +214,36 @@ First, let's look at descriptive 2×2 tables within each age stratum:
 
 ```{r q3_stratified_tables}
 # Cross-tabulations within each age group
+
 mwanza |> 
   filter(age2 == "15-24") |> 
   count(case, ed2) |> 
   group_by(case) |> 
-  mutate(percentage = n / sum(n) * 100)
+  mutate(percentage = n / sum(n) * 100,
+         n_pct = sprintf("%d (%.1f%%)", n, percentage)) |> 
+  select(case, ed2, n_pct) |> 
+  pivot_wider(names_from = ed2, values_from = n_pct) 
+
 
 mwanza |> 
   filter(age2 == "25-34") |> 
-  count(case, ed2) |> 
+    count(case, ed2) |> 
   group_by(case) |> 
-  mutate(percentage = n / sum(n) * 100)
+  mutate(percentage = n / sum(n) * 100) |> 
+  mutate(n_pct = sprintf("%d (%.1f%%)", n, percentage)) |> 
+  select(case, ed2, n_pct) |> 
+  pivot_wider(names_from = ed2, values_from = n_pct)
+
 
 mwanza |> 
   filter(age2 == "35+") |> 
   count(case, ed2) |> 
   group_by(case) |> 
-  mutate(percentage = n / sum(n) * 100)
+  mutate(percentage = n / sum(n) * 100) |> 
+  mutate(n_pct = sprintf("%d (%.1f%%)", n, percentage)) |> 
+  select(case, ed2, n_pct) |> 
+  pivot_wider(names_from = ed2, values_from = n_pct)
+
 ```
 
 ## Adjusted analysis
@@ -244,15 +303,26 @@ mwanza |>
   filter(!is.na(rel)) |> 
   count(case, rel) |> 
   group_by(case) |> 
-  mutate(percentage = n / sum(n) * 100)
+  mutate(percentage = n / sum(n) * 100) |> 
+  mutate(n_pct = sprintf("%d (%.1f%%)", n, percentage)) |> 
+  select(case, rel, n_pct) |> 
+  pivot_wider(names_from = rel, values_from = n_pct)
 
-# Religion and education
+
+# # Now examine association between religion and education 
 mwanza |> 
-  filter(!is.na(rel)) |> 
+  filter(!is.na(rel) & case == "Control") |> 
   count(ed2, rel) |> 
   group_by(ed2) |> 
-  mutate(percentage = n / sum(n) * 100)
+  mutate(percentage = n / sum(n) * 100) |> 
+  mutate(n_pct = sprintf("%d (%.1f%%)", n, percentage)) |> 
+  select(ed2, rel, n_pct) |> 
+  pivot_wider(names_from = rel, values_from = n_pct)
+
+
 ```
+
+Why did we restrict this analysis of the association between religion and education to controls only?
 
 ## Unadjusted and adjusted analysis
 
@@ -325,6 +395,7 @@ mwanza_npa_cc <- mwanza |> filter(!is.na(npa))
 
 # Mantel-Haenszel analysis stratified by npa
 mhor(mwanza_npa_cc, "case", "ed2", strata = "npa_f")
+
 ```
 
 Questions to consider:
@@ -362,7 +433,7 @@ First, get ORs for each group compared to the reference:
 
 ```{r q6_categorical}
 # Calculate ORs for each partner group vs reference using tabodds
-tabodds(mwanza, "case", "npa_f")
+tabodds(mwanza, "case", "npa2")
 ```
 
 
@@ -378,9 +449,10 @@ We test whether the categorical approach (3 df) fits the data better than the li
 # Chi-squared test for categorical association
 npa_table <- table(mwanza$case, mwanza$npa_f)
 cat_chi2 <- chisq.test(npa_table)$statistic
+cat_chi2
 
 # Get trend chi-squared from tabodds
-trend_result <- tabodds(mwanza, "case", "npa_f")
+trend_result <- tabodds(mwanza, "case", "npa2")
 trend_chi2 <- trend_result$trend_chi2
 
 # Departure test
@@ -391,14 +463,17 @@ departure_p <- 1 - pchisq(departure_chi2, departure_df)
 cat("Test for departure from linear trend:\n")
 cat(sprintf("Chi-squared(%d) = %.3f\n", departure_df, departure_chi2))
 cat(sprintf("P-value = %.4f\n", departure_p))
+
 ```
+
+The p-value 0.59, so there is insufficient evidence to conclude the relationship between the npa2 and log-odds of HIV departs from linearity. 
 
 ---
 
 # Key R Functions Used
 
 - `mhor()`: Mantel-Haenszel odds ratios and test for homogeneity (custom function)
-- `tabodds()`: Odds ratios for ordered exposures with score test for trend (custom function)
+- `tabodds()`: Odds ratios for ordered exposures with score test for trend (custom function) 
 - `na_if()`: Convert specific values to missing
 - `chisq.test()`: Chi-squared test for association
 - `fisher.test()`: Fisher's exact test for small samples

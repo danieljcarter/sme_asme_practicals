@@ -1,0 +1,838 @@
+---
+title: "Introduction to R - Workflow"
+author: "Daniel J Carter"
+date: "2025-01-24"
+output: 
+  pdf_document: default
+  html_document: default
+---
+
+# Overview
+
+This notebook covers essential workflow practices for working with R in a professional and reproducible way. Good workflow habits will save you time, prevent errors, and make collaboration (including with your future self!) much easier.
+
+This Intro is split into two main parts. The first part is designed to get you into an R Workflow and the second part is designed to give you a few more options for flexibly coding in R -- you don't need this material for SME, but if you're starting to think about doing your summer project in R, this is a great time to start to learn this, as it will be extremely helpful in future. Topics covered include:
+
+Part 1
+- R Markdown for documents
+- RStudio Projects for organization
+- Git and GitHub for version control
+
+Part 2
+- The `here` package for portable file paths
+- Best practices for coding
+- Writing functions
+
+---
+# Part 1: R Workflow
+
+# Section 1: R Markdown
+
+## What is R Markdown?
+
+R Markdown (.Rmd files) combines:
+
+- **Text** (your narrative and explanations)
+- **Code** (your R analysis)
+- **Output** (figures, tables, results)
+
+Into a single document that can be converted to HTML, PDF, or Word.
+
+## Why Use R Markdown?
+
+1. **Reproducibility** - Code and narrative together
+2. **Dynamic** - Results update when data changes
+3. **Communication** - Share analyses with others
+4. **Documentation** - Your future self will thank you
+
+## Document Structure
+
+Every .Rmd file has three parts:
+
+### 1. YAML Header (at the top)
+
+The YAML header controls document settings and appears between `---` lines:
+
+```yaml
+---
+title: "My Analysis"
+author: "Your Name"
+date: "2025-01-08"
+output: html_document
+---
+```
+
+You can specify different output formats:
+- `html_document` - webpage
+- `pdf_document` - PDF (requires LaTeX/TinyTeX installation)
+- `word_document` - Word document
+
+### 2. Text (Markdown)
+
+Regular text with simple formatting:
+
+```
+# Main Heading
+## Subheading
+### Sub-subheading
+
+This is regular text. You can make **bold** and *italic* text.
+
+- Bullet point 1
+- Bullet point 2
+
+1. Numbered item
+2. Another item
+```
+
+### 3. Code Chunks
+
+Code chunks contain R code and are wrapped in three backticks:
+
+````markdown
+```{r}
+# This is a code chunk
+library(tidyverse)
+summary(mtcars)
+```
+````
+
+## Chunk Options
+
+Control how chunks behave by adding options after `{r`:
+
+````markdown
+```{r chunk_name, echo=FALSE, message=FALSE}
+# Code here
+```
+````
+
+**Common options:**
+
+- `echo=FALSE` - Don't show code, only output
+- `eval=FALSE` - Don't run the code, only display it
+- `include=FALSE` - Run code but don't show anything
+- `message=FALSE` - Hide messages
+- `warning=FALSE` - Hide warnings
+- `fig.width=6, fig.height=4` - Control figure size
+
+**Naming chunks** helps with debugging and navigation:
+
+````markdown
+```{r load_data}
+# Good practice - name your chunks
+```
+````
+
+## Setup Chunk
+
+Most .Rmd files start with a setup chunk that sets default options:
+
+````markdown
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE
+)
+
+library(tidyverse)
+library(here)
+```
+````
+
+This chunk runs first and sets preferences for all subsequent chunks.
+
+## Inline R Code
+
+Insert R results directly into text using backticks with `r`:
+
+```
+The mean age was `r mean(data$age)` years.
+```
+
+When you knit the document, this becomes: "The mean age was 45.3 years."
+
+## Knitting (Optional)
+
+R Markdown files can be "knitted" to create a complete document (HTML, PDF, or Word) with all your code, output, and text combined. **You don't need to knit during analysis** - running chunks interactively is fine.
+
+If you want to create a final report, click the **Knit** button (or Ctrl+Shift+K / Cmd+Shift+K).
+
+**Note:** Knitting runs in a fresh session, so all packages and data must be loaded in your .Rmd file.
+
+---
+
+# Section 2: RStudio Projects
+
+## What is an RStudio Project?
+
+An RStudio Project is a folder that contains all the files related to a specific analysis. When you open a project, RStudio:
+
+1. Sets your working directory to the project folder
+2. Keeps your work organized and isolated from other projects
+3. Restores your previous session (if desired)
+
+**Benefits:**
+
+- No more `setwd()` commands!
+- Each project is self-contained
+- Easy to share entire projects
+- Works the same way on any computer
+
+## Creating a New Project
+
+**Method 1: From RStudio**
+
+1. File > New Project
+2. Choose "New Directory" 
+3. Choose "New Project"
+4. Give it a name (e.g., "SME_Practicals")
+5. Choose where to save it
+6. Click "Create Project"
+
+**Method 2: From an Existing Folder**
+
+1. File > New Project
+2. Choose "Existing Directory"
+3. Navigate to your folder
+4. Click "Create Project"
+
+You'll see a new file created: `projectname.Rproj`. This is your project file.
+
+## Opening a Project
+
+**Always open RStudio by double-clicking the .Rproj file**, not by opening RStudio first. This ensures everything is set up correctly.
+
+You can tell you're in a project when you see the project name in the top-right corner of RStudio.
+
+## Organizing Your Project
+
+A simple, practical project structure - but find what works for you!
+
+```
+SME_Practicals/
+├── SME_Practicals.Rproj
+├── README.md
+├── data/
+│   ├── whitehall.dta
+│   └── trinidad.dta
+├── practical_2.Rmd
+├── practical_3.Rmd
+└── outputs/
+    ├── figure_1.png
+    └── table_1.csv
+```
+
+**Suggested folders:**
+
+- `data/` - Raw data files (keep these untouched!)
+- `outputs/` - Generated figures and tables
+- `functions/` - All functions that you use in your analysis but don't want to clutter your Rmds
+- `.Rmd` files in the main folder - Your analysis scripts
+
+**Golden Rule:** Raw data is read-only. Always keep original data files untouched.
+
+## Creating Folders
+
+You can create folders from within RStudio or R:
+
+```{r eval=FALSE}
+# Create basic folder structure
+dir.create("data")
+dir.create("outputs")
+```
+
+## README Files
+
+A brief README.md file helps you remember what the project is about:
+
+```
+# SME Practicals - 2025
+
+Analysis code for Statistics and Epidemiology Methods practicals.
+
+## Files
+
+- practical_2.Rmd: Whitehall cohort mortality rates
+- practical_3.Rmd: Trinidad cohort survival analysis
+- data/: Raw data files
+```
+
+Create a README in RStudio: File > New File > Text File, save as `README.md`.
+
+---
+
+# Section 3: Git and GitHub
+
+## What is Git?
+
+Git is a version control system that:
+
+- Tracks changes to your files over time
+- Lets you revert to previous versions
+- Creates a backup of your work
+- Documents your analysis history
+
+Think of it as "Track Changes" for your entire R project.
+
+## What is GitHub?
+
+GitHub is a website where you can:
+
+- Store your Git repositories online (cloud backup)
+- Access your work from anywhere
+- Share code with others
+
+## Why Use Version Control?
+
+1. **Backup** - Your work is safe in the cloud
+2. **History** - See what you changed and when
+3. **Undo** - Revert mistakes easily
+4. **Documentation** - Commit messages document your process
+
+## Setting Up Git
+
+### Step 1: Install Git
+
+**Windows:** Download from https://git-scm.com/download/win  
+**Mac:** Open Terminal and type `git --version` (will prompt to install)  
+**Linux:** `sudo apt-get install git`
+
+### Step 2: Configure Git
+
+Open the Terminal in RStudio (Tools > Terminal > New Terminal) and run:
+
+```bash
+git config --global user.name "Your Name"
+git config --global user.email "your.email@example.com"
+```
+
+Use the same email as your GitHub account.
+
+### Step 3: Create GitHub Account
+
+Go to https://github.com and sign up (it's free!). Choose a professional username...
+
+## Connecting RStudio to GitHub
+
+### Create a Personal Access Token (PAT)
+
+GitHub now requires a PAT instead of a password. In R, run:
+
+```{r eval=FALSE}
+# Install usethis if needed
+install.packages("usethis")
+
+# Generate PAT
+usethis::create_github_token()
+```
+
+This opens GitHub in your browser. Set token expiration to 90 days (or longer), select scopes (keep defaults), and click "Generate token".
+
+**Copy the token** (you won't see it again!).
+
+### Store Your PAT
+
+Back in R:
+
+```{r eval=FALSE}
+# Install gitcreds if needed
+install.packages("gitcreds")
+
+# Store your PAT
+gitcreds::gitcreds_set()
+```
+
+Paste your token when prompted.
+
+## Creating Your First Repository
+
+### From RStudio (Easiest Method)
+
+1. Create a new project (or use existing): File > New Project > New Directory > New Project
+2. Name it (e.g., "SME_Practicals")
+3. **Check** "Create a git repository"
+4. Click "Create Project"
+
+You'll now see a **Git** tab in the upper-right pane of RStudio.
+
+### Connecting to GitHub
+
+In RStudio, run:
+
+```{r eval=FALSE}
+usethis::use_github()
+```
+
+This creates a repository on GitHub and connects it to your project. Choose "private" for your coursework. ***DO NOT UPLOAD DATA TO A PUBLIC REPOSITORY***
+
+
+## Basic Git Workflow in RStudio
+
+The basic workflow has three steps:
+
+### 1. Stage Changes
+
+After editing files, go to the **Git tab** in RStudio. You'll see modified files listed. Check the boxes next to files you want to commit.
+
+### 2. Commit (Save a Snapshot)
+
+Click **Commit**. A window opens showing your changes. Write a descriptive commit message:
+
+**Good messages:**
+- "Add survival analysis for age groups"
+- "Fix confidence interval calculation"
+- "Complete practical 2 questions 1-3"
+
+**Bad messages:**
+- "Update"
+- "Changes"
+- "asdfhjshkf"
+
+Click **Commit** to save the snapshot.
+
+### 3. Push (Upload to GitHub)
+
+Click the green **Push** arrow to upload your commits to GitHub. Your work is now backed up!
+
+### 4. Pull (Download Updates)
+
+The blue **Pull** arrow downloads any changes from GitHub. Use this when:
+
+- Working on multiple computers
+- You made changes on GitHub's website
+- Collaborating with others
+
+## Daily Workflow
+
+1. **Start work:** Open your .Rproj file
+2. **Pull** to get any updates
+3. **Make changes:** Edit scripts, run analyses
+4. **Commit often:** Save snapshots with good messages
+5. **Push regularly:** Backup to GitHub (at least daily)
+
+**How often to commit?**
+
+- After completing a logical unit of work
+- Before trying something experimental
+- At the end of each work session
+- Whenever you have something working
+
+## What to Commit vs. Ignore
+
+### DO commit:
+
+- R scripts (.R, .Rmd)
+- Documentation (README.md)
+- Small data files (if not sensitive)
+
+### DON'T commit:
+
+- Large data files
+- Sensitive/confidential data
+- Generated files (.html, .pdf from .Rmd)
+- .Rhistory, .RData files
+
+## Using Git in RStudio: The Visual Workflow
+
+**See what changed:**
+- Git tab shows modified files
+- Click "Diff" to see line-by-line changes in each of the files
+
+**Commit workflow:**
+1. Stage files (check boxes)
+2. Click Commit
+3. Write message
+4. Click Commit button
+5. Click Push
+
+**View history:**
+- Click "History" in Git tab to see all past commits
+- See what changed in each commit
+
+## Common Scenarios
+
+**Made a mistake before committing:**
+- Just undo in RStudio (Ctrl+Z)
+
+**Want to try something experimental:**
+1. Commit your current working version
+2. Make experimental changes
+3. If it works: commit the changes
+4. If it doesn't: right-click file > Revert
+
+**Working on multiple computers:**
+1. Computer 1: Commit and push
+2. Computer 2: Pull, make changes, commit, push
+3. Back to Computer 1: Pull before working
+
+**Always pull before starting work on a different computer!**
+
+---
+# Part 2 - Coding
+
+# Section 4: File Paths with here()
+
+## The Problem with Absolute Paths
+
+**Never do this:**
+
+```{r eval=FALSE}
+# BAD - only works on your computer
+data <- read_csv("C:/Users/Dan/Documents/SME/data/whitehall.csv")
+```
+
+This won't work on anyone else's computer or if you move your project.
+
+## The here() Solution
+
+The `here` package builds file paths relative to your project root:
+
+```{r eval=FALSE}
+library(here)
+
+# GOOD - works on any computer
+data <- read_csv(here("data", "whitehall.csv"))
+```
+
+The `here()` function finds your project root (where the .Rproj file is) and builds paths from there.
+
+## Using here()
+
+```{r eval=FALSE}
+# Install once
+install.packages("here")
+
+# Load in your script
+library(here)
+
+# Check where here() thinks your project root is
+here()
+
+# Build file paths
+here("data", "whitehall.csv")
+here("outputs", "survival_curve.png")
+```
+
+## Practical Examples
+
+These show you how to use here() if you have your Rmd files in the same folder as your .Rproj file, you have a folder called outputs, and a folder called data.
+
+```{r eval=FALSE}
+library(tidyverse)
+library(haven)
+library(here)
+
+# Reading data
+whitehall <- read_stata(here("data", "whitehall.dta"))
+
+# Saving a figure
+ggsave(
+  here("outputs", "survival_curve.png"),
+  width = 8, 
+  height = 6
+)
+
+# Saving a table
+results |> 
+  write_csv(here("outputs", "mortality_rates.csv"))
+```
+
+---
+
+# Section 5: Coding Best Practices
+
+## RStudio Preferences
+
+Set these once for better workflow:
+
+**Tools > Global Options:**
+
+1. **General:**
+   - Restore .RData into workspace: **NO**
+   - Save workspace to .RData on exit: **NEVER**
+   
+   Why? Your analyses should run from a clean slate every time.
+
+2. **Code > Display:**
+   - Show margin (set to 80 characters)
+   
+3. **Code > Saving:**
+   - Ensure source files end with newline
+
+## Naming Conventions
+
+**Files:**
+
+- Use lowercase with underscores: `practical_2.Rmd`
+- Be descriptive: `whitehall_survival.Rmd`
+- Number if order matters: `01_clean_data.R`, `02_analyse.R`
+
+**Objects in R:**
+
+- Use snake_case: `mortality_rate`, `age_groups`
+- Be descriptive: `whitehall_clean` not `data2`
+- Avoid names of functions: don't use `mean`, `c`, `t`
+
+**Functions:**
+
+- Verb names: `calculate_rate()`, `plot_survival()`
+
+## Code Style
+
+Good style makes code easier to read:
+
+```{r eval=FALSE}
+# GOOD - readable
+result <- data |> 
+  filter(age > 50) |> 
+  summarise(mean_age = mean(age))
+
+# BAD - hard to read but technically works
+result<-data|>filter(age>50)|>summarise(mean_age=mean(age))
+```
+
+**Guidelines:**
+
+- Put spaces around operators: `x = 5` not `x=5`
+- One command per line in pipes
+- Indent code blocks so that the bracketing structure is clear 
+  - (RStudio does this automatically or you can do with Code - Reindent Lines)
+- Limit line length to ~80 characters
+
+## Commenting Your Code
+
+**When to comment:**
+
+- Explain *why*, not *what*
+- Document data sources
+- Note assumptions
+- Mark sections
+
+Note that you will have seen 'bad' comments throughout the SME practicals - this is because they are pedagogical tools. In actual analysis, I would not use comments that say what the function is doing, except where I use custom-made, new, or uncommon functions.
+
+```{r eval=FALSE}
+# GOOD comments
+# Remove missing follow-up (per protocol section 4.2)
+data_clean <- data |> 
+  filter(!is.na(followup_years))
+
+# BAD comments  
+# Filter data
+data_clean <- data |> filter(!is.na(followup_years))
+```
+
+Use comments to section your code:
+
+```{r eval=FALSE}
+# Load packages ----
+
+# Import data ----
+
+# Clean data ----
+
+# Analysis ----
+```
+
+---
+
+# Section 6: Writing Functions
+
+## Why Write Functions?
+
+Functions help you:
+
+1. **Avoid repetition** - Don't copy-paste code
+2. **Reduce errors** - Fix bugs in one place
+3. **Make code readable** - Name what you're doing clearly
+
+**Rule of thumb:** If you copy-paste code more than two times, write a function.
+
+## Basic Function Syntax
+
+```{r}
+# Basic template
+function_name <- function(argument1, argument2) {
+  result <- argument1 + argument2
+  return(result)
+}
+
+# Use the function
+function_name(5, 3)
+```
+
+## Example: Calculate Rates
+
+```{r}
+# Function to calculate event rate per 1000
+calculate_rate <- function(events, person_years) {
+  rate <- (events / person_years) * 1000
+  return(rate)
+}
+
+# Use it
+calculate_rate(events = 45, person_years = 1200)
+```
+
+## Example: Rate with Confidence Interval
+
+```{r}
+# Calculate rate with 95% CI
+rate_ci <- function(events, person_years) {
+  # Calculate rate per 1000
+  rate <- (events / person_years) * 1000
+  
+  # Calculate 95% CI (Poisson distribution - Rate!)
+  error_factor <- exp(qnorm(0.975) * sqrt(1 / events))
+  lower <- rate / error_factor
+  upper <- rate * error_factor
+  
+  # Return results
+  return(c(
+    rate = rate,
+    lower_ci = lower,
+    upper_ci = upper
+  ))
+}
+
+# Use it
+rate_ci(45, 1200)
+```
+
+## Functions with Defaults
+
+```{r}
+# Set default values
+calculate_rate <- function(events, person_years, per = 1000) {
+  rate <- (events / person_years) * per
+  return(rate)
+}
+
+# Use default (per 1000)
+calculate_rate(45, 1200)
+
+# Change denominator (per 10000)
+calculate_rate(45, 1200, per = 10000)
+```
+
+## Documenting Functions
+
+Add comments to explain what your function does:
+
+```{r}
+# Calculate mortality rate per 1000 with 95% CI
+# 
+# Arguments:
+#   events - number of deaths
+#   person_years - total person-years of follow-up
+# 
+# Returns:
+#   vector with rate, lower_ci, upper_ci
+#
+rate_ci <- function(events, person_years) {
+  # Function code here
+}
+```
+
+## Testing Functions
+
+Always test with known values:
+
+```{r}
+# Test: 45 events in 1200 person-years
+# Should give 37.5 per 1000
+calculate_rate(45, 1200)
+
+# Test edge cases
+calculate_rate(0, 1000)  # Should be 0
+```
+
+## Organizing Functions
+
+For multiple functions, save them in a separate file:
+
+1. Create `functions.R` in your project
+2. Put all functions there
+3. Load at the start of your analysis:
+
+```{r eval=FALSE}
+source(here("functions.R"))
+```
+
+---
+
+# Summary
+
+You now know how to:
+
+- Write and knit R Markdown documents
+- Create and use RStudio Projects
+- Use Git and GitHub for version control (via RStudio)
+- Use `here()` for portable file paths
+- Follow coding best practices
+- Write simple functions
+
+**Key workflow:**
+
+1. **Work in projects** - Double-click .Rproj to start
+2. **Use here() for paths** - Code works anywhere
+3. **Commit often** - Track your progress
+4. **Write functions** - Avoid repetition
+5. **Document everything** - Help your future self
+
+These practices save time and prevent errors. They're essential for reproducible research.
+
+---
+
+# Practical Exercise
+
+## Set Up Your SME Practicals Project
+
+**Step 1:** Create a new RStudio Project
+
+- File > New Project > New Directory
+- Name: "SME_Practicals"
+- Check "Create a git repository"
+
+**Step 2:** Create folders
+
+```{r eval=FALSE}
+dir.create("data")
+dir.create("outputs")
+```
+
+**Step 3:** Create README.md
+
+```
+# SME Practicals - 2025
+
+Analysis for Statistics and Epidemiology Methods course.
+```
+
+**Step 4:** Connect to GitHub
+
+```{r eval=FALSE}
+usethis::use_github()
+```
+
+**Step 5:** Create your first analysis
+
+Create `test_workflow.Rmd`, write some code, knit it.
+
+**Step 6:** Commit and push
+
+- Stage all files in Git tab
+- Commit with message "Initial project setup"
+- Push to GitHub
+
+If these steps work, you're ready to go!
+
+---
+
+**Further Resources:**
+
+- R Markdown: https://rmarkdown.rstudio.com/
+- Happy Git with R: https://happygitwithr.com/
+- here package: https://here.r-lib.org/
+- R for Data Science: https://r4ds.had.co.nz/

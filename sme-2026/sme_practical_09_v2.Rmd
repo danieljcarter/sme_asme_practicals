@@ -2,6 +2,8 @@
 title: "SME Practical 9: Logistic Regression (Basics) - 2026"
 author: "Daniel J Carter"
 output: html_document
+editor_options: 
+  chunk_output_type: console
 ---
 
 # Overview
@@ -61,7 +63,10 @@ Use tables to examine the association between died and vimp. Construct a table s
 mortality |> 
   count(vimp, died) |> 
   group_by(vimp) |> 
-  mutate(percentage = n / sum(n) * 100)
+  mutate(percentage = n / sum(n) * 100,
+         n_pct = sprintf("%d (%.1f%%)", n, percentage)) |> 
+  select(vimp, died, n_pct) |> 
+  pivot_wider(names_from = died, values_from = n_pct) 
 
 # Simple 2x2 table
 tab_vimp <- table(mortality$vimp, mortality$died)
@@ -69,6 +74,7 @@ tab_vimp
 
 # Calculate odds ratio
 calculate_or(tab_vimp)
+
 ```
 
 ---
@@ -120,7 +126,13 @@ mortality |> count(mfgrp)
 mortality |> 
   count(mfgrp, died) |> 
   group_by(mfgrp) |> 
-  mutate(percentage = n / sum(n) * 100)
+  mutate(percentage = n / sum(n) * 100,
+         n_pct = sprintf("%d (%.1f%%)", n, percentage)) |> 
+  select(mfgrp, died, n_pct) |> 
+  pivot_wider(names_from = died, values_from = n_pct) 
+
+# How would you alter the code above to drop the missing rows missing mfgrp information?
+
 ```
 
 ---
@@ -142,6 +154,7 @@ mod_mfgrp |>
   tbl_regression(
     exponentiate = TRUE,
     label = list(mfgrp = "Microfilarial load"))
+
 ```
 
 Note that there are three odds ratios each of which refers to the same baseline group (those uninfected). The odds ratio is:
@@ -181,6 +194,7 @@ mod_1 <- glm(died ~ mfgrp, family = binomial, data = mortality)
 
 # Likelihood ratio test
 lrtest(mod_0, mod_1)
+
 ```
 
 **The `_` placeholder:** This tells R to use the piped data as the `data` argument to `glm()` (rather than as the first argument, which is the formula). This is needed because the data we want to use has been modified by the pipe.
@@ -199,6 +213,7 @@ mod_age |>
   tbl_regression(
     exponentiate = TRUE,
     label = list(agegrp = "Age group"))
+
 ```
 
 Now fit a model with both vimp and agegrp as explanatory variables. Have the coefficients changed from those in the models with each variable alone?

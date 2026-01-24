@@ -212,8 +212,11 @@ mhor <- function(data, outcome, exposure, strata = NULL) {
 }
 
 
+
+
 #' Test for Trend in Odds Ratios (tabodds)
-#' Mimics Stata's tabodds command
+#' Mimics Stata's tabodds command: Uses the exact formula: χ² = U²/V
+#' Cochran-Armitage test for trend
 #' 
 #' @param data A data frame
 #' @param outcome Name of binary outcome variable
@@ -293,23 +296,50 @@ tabodds <- function(data, outcome, exposure) {
     }
   }
   
-  # Score test for trend (Cochran-Armitage)
-  # Fit logistic regression with exposure as continuous
+  # Score test for trend (Cochran-Armitage exact formula: χ² = U²/V)
   data_for_trend <- data_complete |> 
     mutate(exposure_score = as.numeric(factor(.data[[exposure]], 
                                                levels = exposure_levels)))
   
-  model_trend <- glm(
-    as.formula(paste(outcome, "~ exposure_score")),
-    family = binomial,
-    data = data_for_trend
-  )
+
+    # Create contingency table
+  tab <- table(data_complete[[outcome]], data_complete[[exposure]])
   
-  # Extract test statistic
-  trend_coef <- summary(model_trend)$coefficients[2, ]
-  trend_z <- trend_coef[3]  # z value
-  trend_p <- trend_coef[4]  # p value
-  trend_chi2 <- trend_z^2
+  if (nrow(tab) != 2) {
+    stop("Outcome must have exactly 2 levels for the score test")
+  }
+  
+  # Identify which row is cases
+  case_row <- grep("case|Case|yes|Yes|1|TRUE|Disease|disease", 
+                   rownames(tab), ignore.case = TRUE)
+  if (length(case_row) == 0) {
+    case_row <- 2  # default case to second row
+  }
+  control_row <- setdiff(1:2, case_row)
+  
+  a_i <- tab[case_row, ]      # cases at each exposure level
+  c_i <- tab[control_row, ]   # controls at each exposure level
+  n_i <- a_i + c_i            # total at each level
+  
+  M1 <- sum(a_i)              # total cases
+  M0 <- sum(c_i)              # total controls
+  T_total <- M1 + M0          # total sample size
+  
+  # Get numeric scores from the exposure variable
+  l_i <- as.numeric(names(a_i))
+  
+  # Calculate U statistic
+  U <- (M1 * M0 / T_total) * (sum(a_i * l_i / M1) - sum(c_i * l_i / M0))
+  
+  # Calculate V (variance under null hypothesis)
+  l_bar <- sum(n_i * l_i) / T_total  # weighted mean of scores
+  
+  V <- (M1 * M0 / (T_total * (T_total - 1))) * 
+    sum(n_i * (l_i - l_bar)^2)
+  
+  # Score chi-squared
+  trend_chi2 <- U^2 / V
+  trend_p <- pchisq(trend_chi2, df = 1, lower.tail = FALSE)
   
   # Print output
   cat("\n")
